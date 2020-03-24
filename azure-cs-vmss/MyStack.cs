@@ -9,7 +9,6 @@ class MyStack : Stack
 {
     public MyStack()
     {
-        var stackId = "webScaleSet";
 
         // Create an Azure Resource Group
         var resourceGroup = new ResourceGroup($"{stackId}-rg");
@@ -23,13 +22,15 @@ class MyStack : Stack
             }
         });
 
+        // Create a private subnet for the VMSS
         var privateSubnet = new Subnet($"{stackId}-privateSubnet", new SubnetArgs
         {
             ResourceGroupName = resourceGroup.Name,
             AddressPrefix = "10.0.2.0/24",
             VirtualNetworkName = vnet.Name
         });
-        
+
+        // Create a public subnet for the Application Gateway
         var publicSubnet = new Subnet($"{stackId}-publicSubnet", new SubnetArgs
         {
             ResourceGroupName = resourceGroup.Name,
@@ -37,15 +38,15 @@ class MyStack : Stack
             VirtualNetworkName = vnet.Name
         });
 
-        // Create a LoadBalancer with a public ip
+        // Create a public IP and App Gateway
         var publicIp = new PublicIp($"{stackId}-pip", new PublicIpArgs
         {
             ResourceGroupName = resourceGroup.Name,
             Sku = "Basic",
             AllocationMethod = "Dynamic",
             DomainNameLabel = "aspnettodo"
-        }, new CustomResourceOptions{DeleteBeforeReplace=true});
-        
+        }, new CustomResourceOptions { DeleteBeforeReplace = true });
+
         var appGw = new ApplicationGateway($"{stackId}-appgw", new ApplicationGatewayArgs
         {
             ResourceGroupName = resourceGroup.Name,
@@ -117,11 +118,10 @@ class MyStack : Stack
                     BackendHttpSettingsName = "HTTPSettings"
                 }
             }
-            
+
         });
 
-        
-        
+        // Create the scale set
         var scaleSet = new ScaleSet($"{stackId}-vmss", new ScaleSetArgs
         {
             ResourceGroupName = resourceGroup.Name,
@@ -141,6 +141,7 @@ class MyStack : Stack
                             Name = "IPConfiguration",
                             Primary = true,
                             SubnetId = privateSubnet.Id,
+                            // Associate scaleset with app gateway
                             ApplicationGatewayBackendAddressPoolIds = new InputList<string>
                             {
                                 appGw.BackendAddressPools.Apply(bePools => bePools[0].Id)
@@ -157,17 +158,12 @@ class MyStack : Stack
                 AdminPassword = "SEcurePwd$3",
                 ComputerNamePrefix = "web"
             },
-            OsProfileWindowsConfig = new ScaleSetOsProfileWindowsConfigArgs
-            {
-                ProvisionVmAgent = true
-            },
             Sku = new ScaleSetSkuArgs
             {
                 Capacity = 2,
                 Name = "Standard_B1s",
                 Tier = "Standard",
             },
-
             StorageProfileImageReference = new ScaleSetStorageProfileImageReferenceArgs
             {
                 Offer = "WindowsServer",
@@ -182,7 +178,12 @@ class MyStack : Stack
                 ManagedDiskType = "Standard_LRS",
                 Name = "",
             },
+            // Enable VM agent and script extension
             UpgradePolicyMode = "Automatic",
+            OsProfileWindowsConfig = new ScaleSetOsProfileWindowsConfigArgs
+            {
+                ProvisionVmAgent = true
+            },
             Extensions = new InputList<ScaleSetExtensionsArgs>
             {
                 new ScaleSetExtensionsArgs
@@ -191,14 +192,20 @@ class MyStack : Stack
                     Name = "IIS-Script-Extension",
                     Type = "CustomScriptExtension",
                     TypeHandlerVersion = "1.4",
+                    // Settings is a JSON string
+                    // This command uses powershell to install windows webserver features
                     Settings = "{\"commandToExecute\":\"powershell Add-WindowsFeature Web-Server,Web-Asp-Net45,NET-Framework-Features\"}"
                 }
             }
         });
-        
+
         this.PublicUrl = publicIp.Fqdn;
     }
 
+    // Set a string to use as a prefix on all resources
+    private const string stackId = "webScaleSet";
+    
+    // Define Output string to hold the public url of created resources
     [Output]
     public Output<string> PublicUrl { get; set; }
 }
