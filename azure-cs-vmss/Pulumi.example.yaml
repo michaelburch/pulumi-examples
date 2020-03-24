@@ -1,0 +1,7 @@
+config:
+  azure:clientId: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx
+  azure:clientSecret:
+    secure: AAABAIE...Q=
+  azure:location: CentralUS
+  azure:subscriptionId: yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyy
+  azure:tenantId: zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzz
