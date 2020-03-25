@@ -9,24 +9,44 @@ class MyStack : Stack
 {
     public MyStack()
     {
+        // Retrieve options from config, optionally using defaults
+        var config = new Pulumi.Config();
+        var region = config.Get("azure-cs-vmss:region") ?? "CentralUS";
+        // App Gateway Options
+        InputList<string> addressSpace = (config.Get("addressSpace") ?? "10.0.0.0/16").Split(',');
+        var privateSubnetPrefix = config.Get("privateSubnet") ?? "10.0.2.0/24";
+        var publicSubnetPrefix = config.Get("publicSubnet") ?? "10.0.1.0/24";
+        var dnsPrefix = config.Get("dnsPrefix") ?? "aspnettodo";
+        var backendPort = config.GetInt32("backendPort") ?? 80;
+        var backendProtocol = config.Get("backendProtocol") ?? "HTTP";
+        var frontendPort = config.GetInt32("frontendPort") ?? backendPort;
+        var frontendProtocol = config.Get("frontendProtocol") ?? backendProtocol;
+        // VMSS options
+        var instanceCount = config.GetInt32("instanceCount") ?? 2;
+        InputList<string> zones =  (config.Get("zones") ?? "1,2").Split(',');
+        var instanceSize = config.Get("instanceSize") ?? "Standard_B1s";
+        var instanceNamePrefix = config.Get("instanceNamePrefix") ?? "web";
+        var adminUser = config.Get("adminUser") ?? "webadmin";
+        var adminPassword = config.Get("adminPassword");
 
         // Create an Azure Resource Group
-        var resourceGroup = new ResourceGroup($"{stackId}-rg");
+        var resourceGroup = new ResourceGroup($"{stackId}-rg", new ResourceGroupArgs
+        {
+            Location = region
+        });
 
         // Create Networking components
         var vnet = new VirtualNetwork($"{stackId}-vnet", new VirtualNetworkArgs
         {
             ResourceGroupName = resourceGroup.Name,
-            AddressSpaces = new InputList<string>{
-                "10.0.0.0/16"
-            }
+            AddressSpaces = addressSpace
         });
 
         // Create a private subnet for the VMSS
         var privateSubnet = new Subnet($"{stackId}-privateSubnet", new SubnetArgs
         {
             ResourceGroupName = resourceGroup.Name,
-            AddressPrefix = "10.0.2.0/24",
+            AddressPrefix = privateSubnetPrefix,
             VirtualNetworkName = vnet.Name
         });
 
@@ -34,7 +54,7 @@ class MyStack : Stack
         var publicSubnet = new Subnet($"{stackId}-publicSubnet", new SubnetArgs
         {
             ResourceGroupName = resourceGroup.Name,
-            AddressPrefix = "10.0.1.0/24",
+            AddressPrefix = publicSubnetPrefix,
             VirtualNetworkName = vnet.Name
         });
 
@@ -44,7 +64,7 @@ class MyStack : Stack
             ResourceGroupName = resourceGroup.Name,
             Sku = "Basic",
             AllocationMethod = "Dynamic",
-            DomainNameLabel = "aspnettodo"
+            DomainNameLabel = dnsPrefix
         }, new CustomResourceOptions { DeleteBeforeReplace = true });
 
         var appGw = new ApplicationGateway($"{stackId}-appgw", new ApplicationGatewayArgs
@@ -68,8 +88,8 @@ class MyStack : Stack
             {
                 new Pulumi.Azure.Network.Inputs.ApplicationGatewayFrontendPortsArgs
                 {
-                    Name = "Port80",
-                    Port = 80
+                    Name = $"Port{frontendPort}",
+                    Port = frontendPort
                 }
             },
             BackendAddressPools = new InputList<Pulumi.Azure.Network.Inputs.ApplicationGatewayBackendAddressPoolsArgs>
@@ -83,9 +103,9 @@ class MyStack : Stack
             {
                 new ApplicationGatewayBackendHttpSettingsArgs
                 {
-                    Name = "HTTPSettings",
-                    Protocol = "HTTP",
-                    Port = 80,
+                    Name = $"{backendProtocol}Settings",
+                    Protocol = backendProtocol,
+                    Port = backendPort,
                     CookieBasedAffinity = "Disabled"
                 }
             },
@@ -101,10 +121,10 @@ class MyStack : Stack
             {
                 new ApplicationGatewayHttpListenersArgs
                 {
-                    Name = "HTTPListener",
-                    Protocol = "HTTP",
+                    Name = $"{frontendProtocol}Listener",
+                    Protocol = frontendProtocol,
                     FrontendIpConfigurationName = $"{stackId}-appgw-ipconfig-0",
-                    FrontendPortName = "Port80"
+                    FrontendPortName = $"Port{frontendPort}"
                 }
             },
             RequestRoutingRules = new InputList<ApplicationGatewayRequestRoutingRulesArgs>
@@ -113,9 +133,9 @@ class MyStack : Stack
                 {
                     Name = "Default",
                     BackendAddressPoolName = $"{stackId}-bepool-0",
-                    HttpListenerName = "HTTPListener",
+                    HttpListenerName = $"{frontendProtocol}Listener",
                     RuleType = "Basic",
-                    BackendHttpSettingsName = "HTTPSettings"
+                    BackendHttpSettingsName = $"{backendProtocol}Settings"
                 }
             }
 
@@ -154,14 +174,14 @@ class MyStack : Stack
             },
             OsProfile = new ScaleSetOsProfileArgs
             {
-                AdminUsername = "webadmin",
-                AdminPassword = "SEcurePwd$3",
-                ComputerNamePrefix = "web"
+                AdminUsername = adminUser,
+                AdminPassword = adminPassword,
+                ComputerNamePrefix = instanceNamePrefix
             },
             Sku = new ScaleSetSkuArgs
             {
-                Capacity = 2,
-                Name = "Standard_B1s",
+                Capacity = instanceCount,
+                Name = instanceSize,
                 Tier = "Standard",
             },
             StorageProfileImageReference = new ScaleSetStorageProfileImageReferenceArgs

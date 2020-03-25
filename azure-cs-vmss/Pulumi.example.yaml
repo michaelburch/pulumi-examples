@@ -1,4 +1,9 @@
 config:
+  azure-cs-vmss:adminUser: michael
+  azure-cs-vmss:adminPassword:
+    secure: AAA*******...*******A=
+  azure-cs-vmss:instanceSize: Standard_A1_v2
+  azure-cs-vmss:region: CentralUS
   azure:clientId: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx
   azure:clientSecret:
     secure: AAABAIE...Q=
