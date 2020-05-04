@@ -11,7 +11,7 @@ class MyStack : Stack
     {
         // Retrieve options from config, optionally using defaults
         var config = new Pulumi.Config();
-        var region = config.Get("azure-cs-vmss:region") ?? "CentralUS";
+        var region = config.Get("region") ?? "CentralUS";
         // App Gateway Options
         InputList<string> addressSpace = (config.Get("addressSpace") ?? "10.0.0.0/16").Split(',');
         var privateSubnetPrefix = config.Get("privateSubnet") ?? "10.0.2.0/24";
